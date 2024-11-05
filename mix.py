@@ -95,9 +95,11 @@ def create_check_answer_function(question_item, feedback_label):
     def check_answer(user_answer):
         correct_answer = question_item["answer"]
         if user_answer.lower() == correct_answer.lower():
-            feedback_label.set_text("Correct!").classes('text-lg text-green-500')
+            feedback_label.set_text("Correct!")  # Separate the method calls
+            feedback_label.classes('text-lg text-green-500')
         else:
-            feedback_label.set_text(f"Incorrect! The correct answer was: {correct_answer}").classes('text-lg text-red-500')
+            feedback_label.set_text(f"Incorrect! The correct answer was: {correct_answer}")
+            feedback_label.classes('text-lg text-red-500')
     return check_answer
 
 # Update show_exercise to receive the questions for the current story
