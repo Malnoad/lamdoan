@@ -90,16 +90,20 @@ def show_story(story_title):
     else:
         print(f"Story '{story_title}' not found in loaded stories.")
 
-# Function to dynamically create a check_answer function for each question with separate feedback
 def create_check_answer_function(question_item, feedback_label):
     def check_answer(user_answer):
         correct_answer = question_item["answer"]
+        
+        # Clear previous classes to ensure feedback color updates correctly
+        feedback_label.classes('')  # Clears all previously set classes
+        
         if user_answer.lower() == correct_answer.lower():
-            feedback_label.set_text("Correct!")  # Separate the method calls
+            feedback_label.set_text("Correct!")
             feedback_label.classes('text-lg text-green-500')
         else:
             feedback_label.set_text(f"Incorrect! The correct answer was: {correct_answer}")
             feedback_label.classes('text-lg text-red-500')
+    
     return check_answer
 
 # Update show_exercise to receive the questions for the current story
