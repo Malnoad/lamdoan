@@ -1,5 +1,6 @@
-from flask import Flask
+from flask import Flask, request, jsonify
 import os
+from threading import Lock
 
 class StoryLoader:
     @staticmethod
@@ -17,6 +18,7 @@ class StoryLoader:
                         continue
 
                     if line.startswith("Title:"):
+                        # Save the previous story
                         if current_title and current_content:
                             unique_id = f"{filename}_{current_title}"
                             stories[unique_id] = {
@@ -44,6 +46,7 @@ class StoryLoader:
                     else:
                         current_content.append(line)
 
+                # Save the last story
                 if current_title and current_content:
                     unique_id = f"{filename}_{current_title}"
                     stories[unique_id] = {
@@ -53,13 +56,18 @@ class StoryLoader:
                     }
         except FileNotFoundError:
             print(f"File {filename} not found.")
+        except Exception as e:
+            print(f"Error loading file {filename}: {e}")
         return stories
 
 class BackendApp:
     def __init__(self):
         self.app = Flask(__name__)
         self.stories = {"beginner": {}, "intermediate": {}}
+        self.user_progress = {}  # Tracks user progress {user_id: {story_id: "yes"/"no"}}
+        self.lock = Lock()  # For thread-safe updates
         self.load_stories()
+        self.add_routes()
 
     def load_stories(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -73,6 +81,32 @@ class BackendApp:
                 self.stories["beginner"].update(file_stories)
             elif filename in intermediate_files:
                 self.stories["intermediate"].update(file_stories)
+
+    def update_user_progress(self, user_id, story_id, status):
+        with self.lock:
+            if user_id not in self.user_progress:
+                self.user_progress[user_id] = {}
+            self.user_progress[user_id][story_id] = status
+
+    def get_user_progress(self, user_id):
+        with self.lock:
+            return self.user_progress.get(user_id, {})
+
+    def add_routes(self):
+        @self.app.route('/get_progress/<user_id>', methods=['GET'])
+        def get_progress(user_id):
+            return jsonify(self.get_user_progress(user_id))
+
+        @self.app.route('/update_progress', methods=['POST'])
+        def update_progress():
+            data = request.json
+            user_id = data.get('user_id')
+            story_id = data.get('story_id')
+            status = data.get('status')
+            if not all([user_id, story_id, status]):
+                return jsonify({"error": "Missing parameters"}), 400
+            self.update_user_progress(user_id, story_id, status)
+            return jsonify({"message": "Progress updated"}), 200
 
     def run(self, port=5000):
         self.app.run(port=port)
