@@ -5,6 +5,10 @@ from functools import partial
 
 app = Flask(__name__)
 
+# Simulate a database to store user progress
+user_progress = {}
+
+# Story loading functions
 def load_stories_from_file(filename):
     stories = {}
     try:
@@ -62,128 +66,121 @@ def load_stories_from_multiple_files(filenames):
             all_stories.update(file_stories)
         else:
             print(f"No valid stories found in {filename}.")
-    print("Loaded Stories:", all_stories)  # Debug print to verify loaded stories
     return all_stories
 
+# Load stories
 current_dir = os.path.dirname(os.path.abspath(__file__))  # Get the current directory
 file_list = [
     os.path.join(current_dir, 'alo.txt'),
     os.path.join(current_dir, 'alo1.txt'),
     os.path.join(current_dir, 'alo2.txt'),
-    os.path.join(current_dir, 'alo3.txt')
+    os.path.join(current_dir, 'alo3.txt'),
+    os.path.join(current_dir, 'alo4.txt'),
+    os.path.join(current_dir, 'alo5.txt'),
 ]
 stories = load_stories_from_multiple_files(file_list)
 
+# Function to update user progress
+def update_user_progress(user_id, story_id, status):
+    if user_id not in user_progress:
+        user_progress[user_id] = {}
 
+    user_progress[user_id][story_id] = status
+    print(f"Updated progress for user {user_id} on story {story_id}: {status}")
+
+# Main page
 @ui.page('/')
 def main_page():
-    # Set the background gradient for the main page
     with ui.column().classes('w-full min-h-screen items-center p-4') \
-                .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-    
-    # Main content section
+            .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
         with ui.card().classes('w-full max-w-3xl p-6 mt-8 items-center'):
             with ui.row().classes('w-full items-center gap-4 mb-6'):
                 ui.icon('school', size='32px').classes('text-indigo-600')
                 ui.label('READING').classes('text-2xl font-bold text-indigo-600')
-            with ui.row().style('justify-content: center; margin: 10px 0;gap: 10px; flex-wrap: wrap;'): 
+            with ui.row().style('justify-content: center; margin: 10px 0;gap: 10px; flex-wrap: wrap;'):
                 for category in ['Short Stories', 'Articles', 'News']:
-                    # Create links for each category
-                    ui.link(category, f'/{category.lower().replace(" ", "-")}').classes('w-full bg-indigo hover:bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow-md no-underline text-center')
-                    
+                    ui.link(category, f'/{category.lower().replace(" ", "-")}').classes(
+                        'w-full bg-indigo hover:bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow-md no-underline text-center'
+                    )
 
+# Short stories page
 @ui.page('/short-stories')
 def short_stories_page():
     with ui.column().classes('w-full min-h-screen items-center p-4') \
-                .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-        # Main container for better layout
+            .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
         with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
-            # Stories section header
             ui.label('List of Stories').classes('text-3xl font-bold text-gray-800 mb-4 text-center')
             ui.separator().classes('my-4')
-
-            # Grid layout for stories
             with ui.grid().classes('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'):
                 for story_title in stories.keys():
-                    # Card for each story
                     with ui.card().classes('bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200'):
-                        # Title as link
                         ui.link(story_title, f'/story/{story_title}').classes(
                             'block text-xl font-semibold text-indigo-600 hover:text-indigo-800 py-4 px-6 no-underline'
                         )
-                        # Check if description exists, and add it if it does
-                        description = stories[story_title].get('description', 'No description available.')
-                        ui.label(description[:100] + '...').classes(
-                            'text-gray-600 px-6 pb-4'
-                        )
+                        description = stories[story_title].get('content', ['No description available.'])[0]
+                        ui.label(description[:100] + '...').classes('text-gray-600 px-6 pb-4')
 
-#@ui.page('/short-stories')
-#def short_stories_page():
-#    # Stories section
-#    with ui.card().classes('w-full mt-4'):
-#        ui.label('List of Stories').classes('text-2xl font-semibold text-gray-700')
-#        ui.separator().classes('my-2')
-#        for story_title in stories.keys():
-#            ui.link(story_title, f'/story/{story_title}').classes('bg-indigo hover:bg-indigo text-white font-semibold py-2 rounded-lg shadow-md text-center no-underline')
-        
+# Story detail page
 @ui.page('/story/{story_title}')
 def show_story(story_title):
     story = stories.get(story_title, None)
     if story:
-        story_content = story["content"]
-        story_questions = story["questions"]
-        
-        # Create a styled container for the story
         with ui.column().classes('w-full min-h-screen items-center p-4') \
                 .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
             with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
-            #with ui.card().classes('p-4 rounded-lg shadow-md'):
                 ui.label(f"Story: {story_title}").classes('text-2xl font-bold mb-4')
-                ui.label("\n".join(story_content)).classes('text-lg mb-4')
-        
-        # Pass the specific questions for this story
-            show_exercise(story_questions)
+                ui.label("\n".join(story["content"])).classes('text-lg mb-4')
+                show_exercise(story["questions"], user_id=123, story_id=story_title)  # Example with user_id
     else:
-        print(f"Story '{story_title}' not found in loaded stories.")
-
-def create_check_answer_function(question_item, feedback_label):
-    def check_answer(user_answer):
-        correct_answer = question_item["answer"]
-        
-        # Clear previous classes to ensure feedback color updates correctly
-        feedback_label.classes('')  # Clears all previously set classes
-        
-        if user_answer.lower() == correct_answer.lower():
-            feedback_label.set_text("✓ Correct!")
-            feedback_label.classes('text-lg text-green-500')
-        else:
-            feedback_label.set_text(f"✗ Incorrect! The correct answer was: {correct_answer}")
-            feedback_label.classes('text-lg text-red-500')
-    
-    return check_answer
-
-def show_exercise(story_questions):
-    with ui.column().classes('w-full min-h-screen items-center p-4') \
+        with ui.column().classes('w-full min-h-screen items-center p-4') \
                 .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-        with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
-        #with ui.column().classes('space-y-4'):
-        # Display each question in the story
-            for question_item in story_questions:
-                ui.label(question_item["question"]).classes('text-xl font-semibold mb-2')  # Question text
-            
-                with ui.column().classes('w-full mb-2'):
-                    feedback_label = ui.label('').classes('text-lg mt-2')  # Separate label for each feedback below the select
-                    check_answer_function = create_check_answer_function(question_item, feedback_label)
-                
-                    ui.select(
-                        options=question_item["options"],  # List of options
-                        label='Choose an answer',
-                        on_change=lambda e, check_func=check_answer_function: check_func(e.value)  # Call the specific check_answer function
-                    ).classes('w-full mb-2 bg-gray-100 border border-gray-300 rounded-md p-2')  # Styled dropdown
+            ui.label(f"Story '{story_title}' not found.").classes('text-2xl text-red-600')
 
-                    # Position the feedback label immediately below the dropdown menu
-                    feedback_label.classes('text-lg mt-2')  # Adds spacing between answer and feedback
+def show_exercise(story_questions, user_id, story_id):
+    answers = {}  # Dictionary to store user's answers
+
+    for question_item in story_questions:
+        # Display the question
+        ui.label(question_item["question"]).classes('text-xl font-semibold mb-2')
+
+        # Create a unique feedback label for each question
+        feedback_label = ui.label("").style('font-size: 1rem; margin-top: 0.5rem; display: block;')  # Ensure visibility
+
+        # Define the function to check the user's answer
+        def check_answer(user_answer, feedback_label, question_item):
+            correct_answer = question_item["answer"]
+
+            # Reset feedback styles
+            feedback_label.style('font-size: 1rem; margin-top: 0.5rem; display: block;')  # Ensure label is visible
+
+            if user_answer.lower() == correct_answer.lower():
+                feedback_label.set_text("✓ Correct!")
+                feedback_label.style('color: green; font-size: 1.2rem;')  # Success styling
+                answers[question_item["question"]] = 'yes'
+            else:
+                feedback_label.set_text(f"✗ Incorrect! The correct answer was: {correct_answer}")
+                feedback_label.style('color: red; font-size: 1.2rem;')  # Error styling
+                answers[question_item["question"]] = 'no'
+
+        # Bind the feedback_label and question_item to the function
+        bound_check_answer = partial(check_answer, feedback_label=feedback_label, question_item=question_item)
+
+        # Create a dropdown for selecting answers
+        ui.select(
+            options=question_item["options"],
+            label='Choose an answer',
+            on_change=lambda e, f=bound_check_answer: f(e.value)  # Use the bound function
+        ).classes('w-full mb-2 bg-gray-100 border border-gray-300 rounded-md p-2')
+
+    # Submit button to update progress
+    def submit_progress():
+        for question, status in answers.items():
+            update_user_progress(user_id, story_id, status)  # Update progress for each question
+
+        ui.label("Progress submitted!").style('color: green; font-size: 1.2rem;')  # Show success message
+
+    ui.button('Submit Progress', on_click=submit_progress).classes('w-full bg-indigo-600 hover:bg-indigo-800 text-white py-2 rounded-lg')
 
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(title='Reading Platform',)
+    ui.run(title='Reading Platform')
