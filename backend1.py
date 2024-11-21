@@ -1,27 +1,11 @@
-from flask import Flask, jsonify, request
+from flask import Flask
 import os
 
-app = Flask(__name__)
+class StoryManager:
+    def __init__(self, file_list):
+        self.stories = self._load_stories_from_multiple_files(file_list)
 
-# Simulated database for user progress
-class UserProgress:
-    def __init__(self):
-        self.data = {}
-
-    def update_progress(self, user_id, story_id, status):
-        if user_id not in self.data:
-            self.data[user_id] = {}
-        self.data[user_id][story_id] = status
-
-    def get_progress(self, user_id):
-        return self.data.get(user_id, {})
-
-user_progress = UserProgress()
-
-# Class for loading stories
-class StoryLoader:
-    @staticmethod
-    def load_stories_from_file(filename):
+    def _load_stories_from_file(self, filename):
         stories = {}
         try:
             with open(filename, 'r', encoding='utf-8') as file:
@@ -38,7 +22,7 @@ class StoryLoader:
                         if current_title and current_content:
                             stories[current_title] = {
                                 "content": current_content,
-                                "questions": current_questions
+                                "questions": current_questions,
                             }
                         current_title = line[6:].strip()
                         current_content = []
@@ -51,56 +35,49 @@ class StoryLoader:
                             current_questions.append({
                                 "question": question_text,
                                 "options": options,
-                                "answer": answer
+                                "answer": answer,
                             })
                         except StopIteration:
-                            print(f"Incomplete question data for '{question_text}'.")
+                            print(f"Error: Incomplete question data for '{question_text}'.")
+                            break
                     else:
                         current_content.append(line)
+
                 if current_title and current_content:
                     stories[current_title] = {
                         "content": current_content,
-                        "questions": current_questions
+                        "questions": current_questions,
                     }
+
         except FileNotFoundError:
             print(f"File {filename} not found.")
         return stories
 
-    @staticmethod
-    def load_stories_from_multiple_files(filenames):
+    def _load_stories_from_multiple_files(self, filenames):
         all_stories = {}
         for filename in filenames:
-            file_stories = StoryLoader.load_stories_from_file(filename)
-            all_stories.update(file_stories)
+            all_stories.update(self._load_stories_from_file(filename))
         return all_stories
 
-# Load stories
-current_dir = os.path.dirname(os.path.abspath(__file__))
-file_list = [os.path.join(current_dir, f'alo{i}.txt') for i in range(6)]
-stories = StoryLoader.load_stories_from_multiple_files(file_list)
 
-# API Endpoints
-@app.route('/api/stories', methods=['GET'])
-def get_stories():
-    return jsonify({"stories": list(stories.keys())})
+class ProgressManager:
+    def __init__(self):
+        self.user_progress = {}
 
-@app.route('/api/stories/<string:title>', methods=['GET'])
-def get_story(title):
-    story = stories.get(title)
-    if story:
-        return jsonify(story)
-    return jsonify({"error": "Story not found"}), 404
+    def update_progress(self, user_id, story_id, status):
+        if user_id not in self.user_progress:
+            self.user_progress[user_id] = {}
+        self.user_progress[user_id][story_id] = status
+        print(f"Updated progress for user {user_id} on story {story_id}: {status}")
 
-@app.route('/api/progress', methods=['POST'])
-def update_progress():
-    data = request.json
-    user_id = data.get("user_id")
-    story_id = data.get("story_id")
-    progress = data.get("progress")
-    if user_id and story_id:
-        user_progress.update_progress(user_id, story_id, progress)
-        return jsonify({"message": "Progress updated"})
-    return jsonify({"error": "Invalid data"}), 400
+    def get_progress(self, user_id, story_id):
+        return self.user_progress.get(user_id, {}).get(story_id, None)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+# Initialize the Flask app and managers
+app = Flask(__name__)
+
+# Story and user progress management
+file_list = [f"alo{i}.txt" for i in range(6)]
+story_manager = StoryManager(file_list)
+progress_manager = ProgressManager()
