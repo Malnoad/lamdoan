@@ -1,58 +1,93 @@
+from flask import Flask
 from nicegui import ui
+import os
+from read_backend import StoryLoader, UserProgress
 from functools import partial
 
-class ReadingPlatformUI:
-    def __init__(self, story_manager, progress_manager):
-        self.story_manager = story_manager
-        self.progress_manager = progress_manager
 
-    def main_page(self):
-        @ui.page('/')
-        def render():
+class ReadingUI:
+    def __init__(self):
+        # Initialize Flask app
+        self.app = Flask(__name__)
+
+        # Initialize backend components
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # Get the current directory
+        file_list = [
+            os.path.join(current_dir, 'alo.txt'),
+            os.path.join(current_dir, 'alo1.txt'),
+            os.path.join(current_dir, 'alo2.txt'),
+            os.path.join(current_dir, 'alo3.txt'),
+            os.path.join(current_dir, 'alo4.txt'),
+            os.path.join(current_dir, 'alo5.txt'),
+        ]
+        self.story_loader = StoryLoader(file_list)
+        self.user_progress = UserProgress()
+        self.stories = self.story_loader.stories
+
+        # Debug: Check if stories are loaded
+        if not self.stories:
+            print("No stories found! Please check your file paths.")
+        else:
+            print("Loaded stories:", list(self.stories.keys()))
+
+        # Set up routes
+        self._set_routes()
+
+    def _set_routes(self):
+        # Main Reading Page
+        @ui.page('/reading')
+        def reading_main_page():
             with ui.column().classes('w-full min-h-screen items-center p-4') \
                     .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
                 with ui.card().classes('w-full max-w-3xl p-6 mt-8 items-center'):
                     with ui.row().classes('w-full items-center gap-4 mb-6'):
-                        ui.icon('school', size='32px').classes('text-indigo-600')
-                        ui.label('READING').classes('text-2xl font-bold text-indigo-600')
-                    with ui.row().style('justify-content: center; margin: 10px 0;gap: 10px; flex-wrap: wrap;'):
+                        ui.icon('book', size='32px').classes('text-indigo-600')
+                        ui.label('Reading Section').classes('text-3xl font-bold text-indigo-600 text-center')
+                    with ui.row().style('justify-content: center; margin: 10px 0; gap: 10px; flex-wrap: wrap;'):
                         for category in ['Short Stories', 'Articles', 'News']:
-                            ui.link(category, f'/{category.lower().replace(" ", "-")}').classes(
-                                'w-full bg-indigo hover:bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow-md no-underline text-center'
+                            ui.link(category, f'/reading/{category.lower().replace(" ", "-")}').classes(
+                                'w-full bg-indigo-600 hover:bg-indigo-800 text-white font-semibold py-2 rounded-lg shadow-md no-underline text-center'
                             )
 
-    def short_stories_page(self):
-        @ui.page('/short-stories')
-        def render():
+        # Short Stories Page
+        @ui.page('/reading/short-stories')
+        def short_stories_page():
             with ui.column().classes('w-full min-h-screen items-center p-4') \
                     .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-                with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
-                    ui.label('List of Stories').classes('text-3xl font-bold text-gray-800 mb-4 text-center')
+                with ui.card().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
+                    ui.label('Short Stories').classes('text-3xl font-bold text-gray-800 mb-4 text-center')
                     ui.separator().classes('my-4')
                     with ui.grid().classes('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'):
-                        for story_title in self.story_manager.stories.keys():
+                        for story_title in self.stories.keys():
                             with ui.card().classes('bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200'):
-                                ui.link(story_title, f'/story/{story_title}').classes(
+                                ui.link(story_title, f'/reading/story/{story_title}').classes(
                                     'block text-xl font-semibold text-indigo-600 hover:text-indigo-800 py-4 px-6 no-underline'
                                 )
-                                description = self.story_manager.stories[story_title].get('content', ['No description available.'])[0]
+                                description = self.stories[story_title].get('content', ['No description available.'])[0]
                                 ui.label(description[:100] + '...').classes('text-gray-600 px-6 pb-4')
 
-    def story_detail_page(self):
-        @ui.page('/story/{story_title}')
-        def render(story_title):
-            story = self.story_manager.stories.get(story_title, None)
+        # Story Detail Page
+        @ui.page('/reading/story/{story_title}')
+        def show_story(story_title):
+            story = self.stories.get(story_title, None)
             if story:
                 with ui.column().classes('w-full min-h-screen items-center p-4') \
                         .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
                     with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
                         ui.label(f"Story: {story_title}").classes('text-2xl font-bold mb-4')
                         ui.label("\n".join(story["content"])).classes('text-lg mb-4')
-                        self.show_exercise(story["questions"], user_id=123, story_id=story_title)  # Example with user_id
+                        self.show_exercise(story["questions"], user_id=123, story_id=story_title)
+
+                        ui.link('Back to Homepage', 'http://192.168.1.38:8080').classes(
+                        'w-auto bg-indigo-600 hover:bg-indigo-800 text-white py-1 px-4 rounded-lg mt-4 text-sm')
+
+
             else:
                 with ui.column().classes('w-full min-h-screen items-center p-4') \
                         .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
                     ui.label(f"Story '{story_title}' not found.").classes('text-2xl text-red-600')
+                    ui.link('Back to Home', '/reading').classes(
+                        'w-full bg-gray-700 hover:bg-gray-900 text-white py-2 rounded-lg mt-4')
 
     def show_exercise(self, story_questions, user_id, story_id):
         answers = {}  # Dictionary to store user's answers
@@ -84,18 +119,17 @@ class ReadingPlatformUI:
 
         def submit_progress():
             for question, status in answers.items():
-                self.progress_manager.update_progress(user_id, story_id, status)
+                self.user_progress.update_progress(user_id, story_id, status)
 
             ui.label("Progress submitted!").style('color: green; font-size: 1.2rem;')
 
-        ui.button('Submit Progress', on_click=submit_progress).classes('w-full bg-indigo-600 hover:bg-indigo-800 text-white py-2 rounded-lg')
+            ui.button('Submit Progress', on_click=submit_progress).classes(
+            'w-full bg-indigo-600 hover:bg-indigo-800 text-white py-2 rounded-lg')
+
+    def run(self):
+        ui.run(title='Reading Platform', favicon='🎓')
 
 
-# Initialize the UI
-ui_app = ReadingPlatformUI(story_manager, progress_manager)
-ui_app.main_page()
-ui_app.short_stories_page()
-ui_app.story_detail_page()
-
-if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(title='Reading Platform')
+if __name__ == '__main__':
+    app = ReadingUI()
+    app.run()
