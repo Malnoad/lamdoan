@@ -1,100 +1,55 @@
 from nicegui import ui
-from backend import StoryManager
+import requests
 
-class ReadingPlatform:
-    def __init__(self):
-        self.story_manager = StoryManager()
+API_BASE_URL = 'http://127.0.0.1:5000/api'
 
-    def main_page(self):
-        @ui.page('/')
-        def page():
-            with ui.column().classes('w-full min-h-screen items-center p-4') \
-                    .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-                with ui.card().classes('w-full max-w-3xl p-6 mt-8 items-center'):
-                    with ui.row().classes('w-full items-center gap-4 mb-6'):
-                        ui.icon('school', size='32px').classes('text-indigo-600')
-                        ui.label('READING').classes('text-2xl font-bold text-indigo-600')
-                    with ui.row().style('justify-content: center; margin: 10px 0;gap: 10px; flex-wrap: wrap;'):
-                        for category in ['Short Stories', 'Articles', 'News']:
-                            ui.link(category, f'/{category.lower().replace(" ", "-")}').classes(
-                                'w-full bg-indigo hover:bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow-md no-underline text-center'
-                            )
+# Helper class for API communication
+class APIClient:
+    @staticmethod
+    def fetch_stories():
+        response = requests.get(f"{API_BASE_URL}/stories")
+        return response.json().get("stories", [])
 
-    def short_stories_page(self):
-        @ui.page('/short-stories')
-        def page():
-            stories = self.story_manager.stories
-            with ui.column().classes('w-full min-h-screen items-center p-4') \
-                    .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-                with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
-                    ui.label('List of Stories').classes('text-3xl font-bold text-gray-800 mb-4 text-center')
-                    ui.separator().classes('my-4')
-                    with ui.grid().classes('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'):
-                        for story_title in stories.keys():
-                            with ui.card().classes('bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200'):
-                                ui.link(story_title, f'/story/{story_title}').classes(
-                                    'block text-xl font-semibold text-indigo-600 hover:text-indigo-800 py-4 px-6 no-underline'
-                                )
-                                description = stories[story_title].get('content', ['No description available.'])[0]
-                                ui.label(description[:100] + '...').classes('text-gray-600 px-6 pb-4')
+    @staticmethod
+    def fetch_story_details(title):
+        response = requests.get(f"{API_BASE_URL}/stories/{title}")
+        return response.json()
 
-    def story_detail_page(self):
-        @ui.page('/story/{story_title}')
-        def page(story_title):
-            stories = self.story_manager.stories
-            story = stories.get(story_title, None)
-            if story:
-                with ui.column().classes('w-full min-h-screen items-center p-4') \
-                        .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-                    with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
-                        ui.label(f"Story: {story_title}").classes('text-2xl font-bold mb-4')
-                        ui.label("\n".join(story["content"])).classes('text-lg mb-4')
-                        self.show_exercise(story["questions"], user_id=123, story_id=story_title)  # Example with user_id
-            else:
-                with ui.column().classes('w-full min-h-screen items-center p-4') \
-                        .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
-                    ui.label(f"Story '{story_title}' not found.").classes('text-2xl text-red-600')
+    @staticmethod
+    def submit_progress(user_id, story_id, progress):
+        data = {"user_id": user_id, "story_id": story_id, "progress": progress}
+        requests.post(f"{API_BASE_URL}/progress", json=data)
 
-    def show_exercise(self, story_questions, user_id, story_id):
-        answers = {}  # Dictionary to store user's answers
+# Frontend pages
+@ui.page('/')
+def main_page():
+    with ui.column().classes('w-full min-h-screen items-center p-4'):
+        ui.label('READING PLATFORM').classes('text-4xl font-bold mb-4')
+        stories = APIClient.fetch_stories()
+        for story in stories:
+            ui.link(story, f"/story/{story}").classes('text-lg text-indigo-600 underline mb-2')
 
-        for question_item in story_questions:
-            ui.label(question_item["question"]).classes('text-xl font-semibold mb-2')
-            feedback_label = ui.label("").style('font-size: 1rem; margin-top: 0.5rem; display: block;')
+@ui.page('/story/{title}')
+def story_page(title):
+    story = APIClient.fetch_story_details(title)
+    if 'error' in story:
+        ui.label(story['error']).classes('text-red-500')
+    else:
+        ui.label(f"Story: {title}").classes('text-2xl font-bold mb-4')
+        for paragraph in story['content']:
+            ui.label(paragraph).classes('text-lg mb-2')
 
-            def check_answer(user_answer, feedback_label, question_item):
-                correct_answer = question_item["answer"]
-                feedback_label.style('font-size: 1rem; margin-top: 0.5rem; display: block;')
+        progress = {}
+        for question in story['questions']:
+            ui.label(question['question']).classes('text-xl mb-2')
+            selected_option = ui.select(question['options'], label='Choose an answer')
+            progress[question['question']] = selected_option.value
 
-                if user_answer.lower() == correct_answer.lower():
-                    feedback_label.set_text("✓ Correct!")
-                    feedback_label.style('color: green; font-size: 1.2rem;')
-                    answers[question_item["question"]] = 'yes'
-                else:
-                    feedback_label.set_text(f"✗ Incorrect! The correct answer was: {correct_answer}")
-                    feedback_label.style('color: red; font-size: 1.2rem;')
-                    answers[question_item["question"]] = 'no'
+        def submit():
+            APIClient.submit_progress(123, title, progress)
+            ui.notify('Progress submitted successfully!')
 
-            ui.select(
-                options=question_item["options"],
-                label='Choose an answer',
-                on_change=lambda e, f=partial(check_answer, feedback_label=feedback_label, question_item=question_item): f(e.value)
-            ).classes('w-full mb-2 bg-gray-100 border border-gray-300 rounded-md p-2')
+        ui.button('Submit Progress', on_click=submit).classes('bg-blue-500 text-white p-2 rounded')
 
-        def submit_progress():
-            for question, status in answers.items():
-                self.story_manager.update_user_progress(user_id, story_id, status)
-            ui.label("Progress submitted!").style('color: green; font-size: 1.2rem;')
-
-        ui.button('Submit Progress', on_click=submit_progress).classes('w-full bg-indigo-600 hover:bg-indigo-800 text-white py-2 rounded-lg')
-
-    def run(self):
-        self.main_page()
-        self.short_stories_page()
-        self.story_detail_page()
-        ui.run(title='Reading Platform')
-
-
-if __name__ == "__main__":
-    platform = ReadingPlatform()
-    platform.run()
+if __name__ == '__main__':
+    ui.run(title="Reading Platform")
