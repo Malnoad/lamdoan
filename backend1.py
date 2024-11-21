@@ -1,12 +1,27 @@
+from flask import Flask, jsonify, request
 import os
 
-class StoryManager:
-    def __init__(self):
-        self.user_progress = {}
-        self.stories = {}
-        self.load_stories()
+app = Flask(__name__)
 
-    def load_stories_from_file(self, filename):
+# Simulated database for user progress
+class UserProgress:
+    def __init__(self):
+        self.data = {}
+
+    def update_progress(self, user_id, story_id, status):
+        if user_id not in self.data:
+            self.data[user_id] = {}
+        self.data[user_id][story_id] = status
+
+    def get_progress(self, user_id):
+        return self.data.get(user_id, {})
+
+user_progress = UserProgress()
+
+# Class for loading stories
+class StoryLoader:
+    @staticmethod
+    def load_stories_from_file(filename):
         stories = {}
         try:
             with open(filename, 'r', encoding='utf-8') as file:
@@ -17,7 +32,7 @@ class StoryManager:
                 for line in file:
                     line = line.strip()
                     if not line:
-                        continue  # Skip empty lines
+                        continue
 
                     if line.startswith("Title:"):
                         if current_title and current_content:
@@ -25,61 +40,67 @@ class StoryManager:
                                 "content": current_content,
                                 "questions": current_questions
                             }
-
                         current_title = line[6:].strip()
                         current_content = []
-                        current_questions = []  # Reset for new story
+                        current_questions = []
                     elif line.startswith("Question:"):
                         question_text = line[9:].strip()
                         try:
-                            options = next(file).strip().split(';')  # Expect options on the next line
-                            answer = next(file).strip()  # Expect the correct answer on the line after options
+                            options = next(file).strip().split(';')
+                            answer = next(file).strip()
                             current_questions.append({
                                 "question": question_text,
                                 "options": options,
                                 "answer": answer
                             })
                         except StopIteration:
-                            print(f"Error: Incomplete question data for '{question_text}'.")
-                            break  # Stop processing further questions
+                            print(f"Incomplete question data for '{question_text}'.")
                     else:
                         current_content.append(line)
-
                 if current_title and current_content:
                     stories[current_title] = {
                         "content": current_content,
                         "questions": current_questions
                     }
-
         except FileNotFoundError:
             print(f"File {filename} not found.")
         return stories
 
-    def load_stories_from_multiple_files(self, filenames):
+    @staticmethod
+    def load_stories_from_multiple_files(filenames):
         all_stories = {}
         for filename in filenames:
-            file_stories = self.load_stories_from_file(filename)
-            if file_stories:  # Only add if there are valid stories
-                all_stories.update(file_stories)
-            else:
-                print(f"No valid stories found in {filename}.")
+            file_stories = StoryLoader.load_stories_from_file(filename)
+            all_stories.update(file_stories)
         return all_stories
 
-    def load_stories(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))  # Get the current directory
-        file_list = [
-            os.path.join(current_dir, 'alo.txt'),
-            os.path.join(current_dir, 'alo1.txt'),
-            os.path.join(current_dir, 'alo2.txt'),
-            os.path.join(current_dir, 'alo3.txt'),
-            os.path.join(current_dir, 'alo4.txt'),
-            os.path.join(current_dir, 'alo5.txt'),
-        ]
-        self.stories = self.load_stories_from_multiple_files(file_list)
+# Load stories
+current_dir = os.path.dirname(os.path.abspath(__file__))
+file_list = [os.path.join(current_dir, f'alo{i}.txt') for i in range(6)]
+stories = StoryLoader.load_stories_from_multiple_files(file_list)
 
-    def update_user_progress(self, user_id, story_id, status):
-        if user_id not in self.user_progress:
-            self.user_progress[user_id] = {}
+# API Endpoints
+@app.route('/api/stories', methods=['GET'])
+def get_stories():
+    return jsonify({"stories": list(stories.keys())})
 
-        self.user_progress[user_id][story_id] = status
-        print(f"Updated progress for user {user_id} on story {story_id}: {status}")
+@app.route('/api/stories/<string:title>', methods=['GET'])
+def get_story(title):
+    story = stories.get(title)
+    if story:
+        return jsonify(story)
+    return jsonify({"error": "Story not found"}), 404
+
+@app.route('/api/progress', methods=['POST'])
+def update_progress():
+    data = request.json
+    user_id = data.get("user_id")
+    story_id = data.get("story_id")
+    progress = data.get("progress")
+    if user_id and story_id:
+        user_progress.update_progress(user_id, story_id, progress)
+        return jsonify({"message": "Progress updated"})
+    return jsonify({"error": "Invalid data"}), 400
+
+if __name__ == '__main__':
+    app.run(debug=True)
