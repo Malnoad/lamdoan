@@ -1,106 +1,87 @@
 from nicegui import ui
-from threading import Thread
 from functools import partial
-import requests
-from backend1 import BackendApp
+from backend1 import stories, update_user_progress
 
-class FrontendApp:
-    def __init__(self, backend, user_id="user_1"):
-        self.backend = backend
-        self.content_label = None
-        self.options = None
-        self.user_id = user_id
-        self.current_story_id = None  # Track the currently selected story
+# Main page
+@ui.page('/')
+def main_page():
+    with ui.column().classes('w-full min-h-screen items-center p-4') \
+            .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
+        with ui.card().classes('w-full max-w-3xl p-6 mt-8 items-center'):
+            with ui.row().classes('w-full items-center gap-4 mb-6'):
+                ui.icon('school', size='32px').classes('text-indigo-600')
+                ui.label('READING').classes('text-2xl font-bold text-indigo-600')
+            with ui.row().style('justify-content: center; margin: 10px 0;gap: 10px; flex-wrap: wrap;'):
+                for category in ['Short Stories', 'Articles', 'News']:
+                    ui.link(category, f'/{category.lower().replace(" ", "-")}').classes(
+                        'w-full bg-indigo hover:bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow-md no-underline text-center'
+                    )
 
-    def create_ui(self):
-        with ui.row().classes('w-full'):
-            with ui.column().classes('w-1/4 p-4'):
-                ui.label('Type of Content').classes('text-2xl')
-                ui.separator()
-                ui.link('Short Stories', '/short-stories')
-                ui.link('Articles', '/articles')
-                ui.link('News', '/news')
+# Short stories page
+@ui.page('/short-stories')
+def short_stories_page():
+    with ui.column().classes('w-full min-h-screen items-center p-4') \
+            .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
+        with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
+            ui.label('List of Stories').classes('text-3xl font-bold text-gray-800 mb-4 text-center')
+            ui.separator().classes('my-4')
+            with ui.grid().classes('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'):
+                for story_title in stories.keys():
+                    with ui.card().classes('bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200'):
+                        ui.link(story_title, f'/story/{story_title}').classes(
+                            'block text-xl font-semibold text-indigo-600 hover:text-indigo-800 py-4 px-6 no-underline'
+                        )
+                        description = stories[story_title].get('content', ['No description available.'])[0]
+                        ui.label(description[:100] + '...').classes('text-gray-600 px-6 pb-4')
 
-            with ui.column().classes('w-3/4 p-4'):
-                self.content_label = ui.label('Select a category from the sidebar to begin reading.').classes('text-lg')
+# Story detail page
+@ui.page('/story/{story_title}')
+def show_story(story_title):
+    story = stories.get(story_title, None)
+    if story:
+        with ui.column().classes('w-full min-h-screen items-center p-4') \
+                .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
+            with ui.column().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
+                ui.label(f"Story: {story_title}").classes('text-2xl font-bold mb-4')
+                ui.label("\n".join(story["content"])).classes('text-lg mb-4')
+                show_exercise(story["questions"], user_id=123, story_id=story_title)  # Example with user_id
+    else:
+        with ui.column().classes('w-full min-h-screen items-center p-4') \
+                .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
+            ui.label(f"Story '{story_title}' not found.").classes('text-2xl text-red-600')
 
-        with ui.row().classes('w-full mt-4'):
-            with ui.column().classes('w-1/4 p-4'):
-                ui.label('List of Stories').classes('text-2xl')
-                ui.separator()
+def show_exercise(story_questions, user_id, story_id):
+    answers = {}  # Dictionary to store user's answers
 
-                ui.label('Beginner').classes('text-xl mt-4')
-                for story_id, story in self.backend.stories["beginner"].items():
-                    ui.button(story["display_title"], on_click=partial(self.show_story, story_id)).classes('w-full')
+    for question_item in story_questions:
+        ui.label(question_item["question"]).classes('text-xl font-semibold mb-2')
+        feedback_label = ui.label("").style('font-size: 1rem; margin-top: 0.5rem; display: block;')
 
-                ui.label('Intermediate').classes('text-xl mt-4')
-                for story_id, story in self.backend.stories["intermediate"].items():
-                    ui.button(story["display_title"], on_click=partial(self.show_story, story_id)).classes('w-full')
+        def check_answer(user_answer, feedback_label, question_item):
+            correct_answer = question_item["answer"]
+            feedback_label.style('font-size: 1rem; margin-top: 0.5rem; display: block;')
 
-            with ui.column().classes('w-3/4 p-4'):
-                self.content_label = ui.label('Select a story to read.').classes('text-lg')
-                self.options = ui.column().classes('mt-4')
+            if user_answer.lower() == correct_answer.lower():
+                feedback_label.set_text("✓ Correct!")
+                feedback_label.style('color: green; font-size: 1.2rem;')
+                answers[question_item["question"]] = 'yes'
+            else:
+                feedback_label.set_text(f"✗ Incorrect! The correct answer was: {correct_answer}")
+                feedback_label.style('color: red; font-size: 1.2rem;')
+                answers[question_item["question"]] = 'no'
 
-    def show_story(self, story_id):
-        self.current_story_id = story_id
-        story = self.backend.stories["beginner"].get(story_id) or self.backend.stories["intermediate"].get(story_id)
-        if story:
-            self.content_label.set_text(f"Story: {story['display_title']}\n\n" + "\n".join(story["content"]))
-            self.show_exercise(story["questions"])
-        else:
-            print(f"Story with ID '{story_id}' not found.")
+        ui.select(
+            options=question_item["options"],
+            label='Choose an answer',
+            on_change=lambda e, f=partial(check_answer, feedback_label=feedback_label, question_item=question_item): f(e.value)
+        ).classes('w-full mb-2 bg-gray-100 border border-gray-300 rounded-md p-2')
 
-    def show_exercise(self, questions):
-        self.options.clear()
-        completed = [False]  # Mutable list to track if the exercise is completed
+    def submit_progress():
+        for question, status in answers.items():
+            update_user_progress(user_id, story_id, status)
+        ui.label("Progress submitted!").style('color: green; font-size: 1.2rem;')
 
-        for question in questions:
-            with self.options:
-                ui.label(question["question"]).classes('text-xl mb-2')
-                with ui.column().classes('w-full mb-2'):
-                    feedback_label = ui.label('').classes('text-lg mt-2')
-                    ui.select(
-                        options=question["options"],
-                        label='Choose an answer',
-                        on_change=lambda e, q=question, fl=feedback_label: self.check_answer(e.value, q, fl, completed)
-                    ).classes('w-full mb-2')
-
-        ui.button("Submit Exercise", on_click=lambda: self.mark_exercise_done(completed)).classes('mt-4')
-
-    def check_answer(self, user_answer, question, feedback_label, completed):
-        correct_answer = question["answer"]
-        is_correct = user_answer.lower() == correct_answer.lower()
-        feedback_label.set_text("Correct!" if is_correct else f"Incorrect! Correct: {correct_answer}")
-        feedback_label.classes('text-lg text-green-500' if is_correct else 'text-lg text-red-500')
-        if is_correct:
-            completed[0] = True
-
-    def mark_exercise_done(self, completed):
-        if not self.current_story_id:
-            ui.notify("No story selected!", type="negative")
-            return
-
-        status = "yes" if completed[0] else "no"
-        response = requests.post("http://127.0.0.1:5000/update_progress", json={
-            "user_id": self.user_id,
-            "story_id": self.current_story_id,
-            "status": status
-        })
-        if response.status_code == 200:
-            ui.notify(f"Exercise marked as {'done' if status == 'yes' else 'not done'}.")
-        else:
-            ui.notify("Failed to update progress.", type="negative")
-
-    def run(self):
-        ui.run()
-
-def run_backend_in_thread(backend):
-    thread = Thread(target=backend.run, daemon=True)
-    thread.start()
+    ui.button('Submit Progress', on_click=submit_progress).classes('w-full bg-indigo-600 hover:bg-indigo-800 text-white py-2 rounded-lg')
 
 if __name__ in {"__main__", "__mp_main__"}:
-    backend_app = BackendApp()
-    frontend_app = FrontendApp(backend_app)
-    run_backend_in_thread(backend_app)
-    frontend_app.create_ui()
-    frontend_app.run()
+    ui.run(title='Reading Platform')
