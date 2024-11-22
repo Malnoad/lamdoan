@@ -65,6 +65,20 @@ class ReadingUI:
                                 )
                                 description = self.stories[story_title].get('content', ['No description available.'])[0]
                                 ui.label(description[:100] + '...').classes('text-gray-600 px-6 pb-4')
+        # Article Page
+        @ui.page('/reading/articles')
+        def short_stories_page():
+            with ui.column().classes('w-full min-h-screen items-center p-4') \
+                    .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
+                with ui.card().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
+                    ui.label('DEVELOPING').classes('text-3xl font-bold text-gray-800 mb-4 text-center')
+        # News Page
+        @ui.page('/reading/news')
+        def short_stories_page():
+            with ui.column().classes('w-full min-h-screen items-center p-4') \
+                    .style('background: linear-gradient(135deg, #f0f4ff, #e5e7ff)'):
+                with ui.card().classes('max-w-4xl mx-auto p-6 bg-gray-50 rounded-lg shadow-lg'):
+                    ui.label('DEVELOPING').classes('text-3xl font-bold text-gray-800 mb-4 text-center')
 
         # Story Detail Page
         @ui.page('/reading/story/{story_title}')
